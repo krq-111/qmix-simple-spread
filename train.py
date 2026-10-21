@@ -38,8 +38,12 @@ def parse_args():
     p.add_argument("--train-iters", type=int, default=2, help="每局结束后学习几次")
     p.add_argument("--warmup", type=int, default=32, help="缓冲区攒够多少局后开始学习")
     p.add_argument("--lr", type=float, default=5e-4)
+    p.add_argument("--optimizer", type=str, default="rmsprop", choices=["rmsprop", "adam"],
+                   help="adam 是 marlbenchmark/off-policy 在 MPE 上用的配置")
     p.add_argument("--gamma", type=float, default=0.99)
     p.add_argument("--target-update", type=int, default=200, help="每隔多少局硬更新目标网络")
+    p.add_argument("--tau", type=float, default=0.0,
+                   help=">0 时改用软更新(Polyak, 每局训练后执行), off-policy 在 MPE 用 0.005")
     # 探索
     p.add_argument("--eps-start", type=float, default=1.0)
     p.add_argument("--eps-finish", type=float, default=0.05)
@@ -48,6 +52,8 @@ def parse_args():
     p.add_argument("--hidden-dim", type=int, default=64, help="GRU 隐藏维度")
     p.add_argument("--mix-embed-dim", type=int, default=32, help="混合网络隐藏维度")
     # 杂项
+    p.add_argument("--no-reward-norm", action="store_true", help="关闭奖励归一化")
+    p.add_argument("--no-double-q", action="store_true", help="关闭 Double-Q")
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--eval-interval", type=int, default=500, help="每隔多少局贪心评估一次")
     p.add_argument("--eval-episodes", type=int, default=10)
@@ -76,7 +82,9 @@ def main():
     agent = QMIX(n_agents=info["n_agents"], n_actions=info["n_actions"],
                  obs_dim=info["obs_dim"], state_dim=info["state_dim"],
                  hidden_dim=args.hidden_dim, mix_embed_dim=args.mix_embed_dim,
-                 lr=args.lr, gamma=args.gamma)
+                 lr=args.lr, gamma=args.gamma, optimizer=args.optimizer,
+                 use_double_q=not args.no_double_q,
+                 use_reward_norm=not args.no_reward_norm)
     buffer = ReplayBuffer(args.buffer_size)
 
     # 首次 reset 传种子, 之后每局环境自动换新地图
@@ -108,8 +116,10 @@ def main():
             loss_val = float(np.mean(losses))
             loss_acc += loss_val
             loss_n += 1
-            if ep % args.target_update == 0:
-                agent.update_target()
+            if args.tau > 0:
+                agent.soft_update_target(args.tau)   # 软更新: 每局训练后
+            elif ep % args.target_update == 0:
+                agent.update_target()                # 硬更新: 每 N 局
 
         # 周期性贪心评估
         if ep % args.eval_interval == 0:

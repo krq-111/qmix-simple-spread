@@ -55,6 +55,8 @@ QMIX 的核心问题是:合作型 MARL 有共享团队奖励,但执行时要每�
 | `train.py` | 训练入口(命令行超参数、日志、检查点) | ~140 |
 | `evaluate.py` | 贪心评估 + 生成行为演示 GIF | ~90 |
 | `plot_results.py` | 从 `progress.csv` 画 reward / loss 曲线 | ~90 |
+| `test_learner.py` | 合成环境(已知最优解)验证学习器能否收敛 | ~100 |
+| `test_td_crosscheck.py` | 用独立实现交叉验证 TD 损失的正确性 | ~110 |
 | `debug_q.py` | 诊断 Q 值量级是否发散(排障利器) | ~80 |
 
 ### 关键实现点(也是最容易踩的坑)
@@ -67,11 +69,20 @@ QMIX 的核心问题是:合作型 MARL 有共享团队奖励,但执行时要每�
 3. **目标网络的 RNN 输入约定必须与在线网络一致**(`当前obs + 上一步动作`),
    再用 `q_target[:, 1:]` 错一位做自举 —— 这里错位是复现 QMIX 最典型的 bug,
    症状是"越学越差、贪心策略不如随机"。
-4. **奖励归一化 + Double-Q**:simple_spread 上值分解算法很容易 Q 值发散
-   (诊断特征:loss 指数增长、Q_tot 为大正数而真实回报是负数)。本项目按
-   [marlbenchmark/off-policy](https://github.com/marlbenchmark/off-policy)
-   的 MPE 配方默认开启这两项,详见其
-   `train_mpe_qmix.sh`(`--use_reward_normalization`)与 `use_double_q` 默认值。
+4. **目标网络必须用软更新(Polyak, τ=0.005)而不是周期性硬拷贝**:这是本项目
+   踩过的最大的坑。硬拷贝 + GRU + 混合网络的自举会形成正反馈,Q 值持续向上
+   漂移(奖励恒为负 Q 却变正、loss 每 1000 局翻倍、评估回报越训越差)。
+   `test_learner.py` 在一个已知最优解的合成环境上验证:硬更新 Q 漂到 2 倍
+   最优值,τ=0.005 软更新则精确收敛。`--tau 0.005` 因此是默认推荐配置
+   (与 [marlbenchmark/off-policy](https://github.com/marlbenchmark/off-policy)
+   在 MPE 上的做法一致)。
+5. **奖励归一化 + Double-Q** 是第二层稳定化(同上仓库的 MPE 配方):
+   归一化防止 TD 目标量级越滚越大,Double-Q(DDQN 式:在线网络选动作、
+   目标网络估值)抑制 max 过估计。`--no-reward-norm --no-double-q` 可关掉
+   做消融实验。
+6. **TD 语义可以用独立实现交叉验证**:`test_td_crosscheck.py` 用一份不复用
+   `learn()` 代码的手写实现,在同一批数据同一份权重上算出完全相同的 loss
+   (差值 0.0),确认 TD 目标构造无误 —— 这是排查"越训越差"类问题的可靠手段。
 
 ## 3. 快速开始
 
@@ -85,7 +96,8 @@ pip install -r requirements.txt
 python envs.py
 
 # 3) 正式训练(5 万局,CPU 约 2 小时;日志与模型写入 results/qmix_final/)
-python train.py --episodes 50000 --tag qmix_final
+#    --tau 0.005(软更新)是稳定训练的关键, 详见"关键实现点"第 4 条
+python train.py --episodes 50000 --tau 0.005 --tag qmix_final
 
 # 4) 画 reward 曲线
 python plot_results.py results/qmix_final/progress.csv --smooth 1000
@@ -110,7 +122,8 @@ python debug_q.py --checkpoint results/qmix_final/latest.pth
 | `--train-iters` | 2 | 每收集一局后学习几次 |
 | `--lr` | 5e-4 | RMSprop 学习率 |
 | `--gamma` | 0.99 | 折扣因子 |
-| `--target-update` | 200 | 每多少局硬更新目标网络 |
+| `--target-update` | 200 | 每多少局硬更新目标网络(用 `--tau` 时忽略) |
+| `--tau` | 0(推荐 0.005) | 软更新系数;>0 时每局训练后 Polyak 更新 |
 | `--eps-start/finish/anneal` | 1.0 / 0.05 / 5000 | ε-greedy 退火 |
 | `--hidden-dim` | 64 | GRU 隐藏维度 |
 | `--mix-embed-dim` | 32 | 混合网络隐藏维度 |

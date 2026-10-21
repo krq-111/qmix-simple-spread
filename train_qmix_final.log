@@ -1,0 +1,11 @@
+[config] {'n_agents': 3, 'max_cycles': 25, 'local_ratio': 0.5, 'episodes': 50000, 'buffer_size': 5000, 'batch_size': 32, 'train_iters': 2, 'warmup': 32, 'lr': 0.0005, 'optimizer': 'rmsprop', 'gamma': 0.99, 'target_update': 200, 'tau': 0.005, 'eps_start': 1.0, 'eps_finish': 0.05, 'eps_anneal': 5000, 'hidden_dim': 64, 'mix_embed_dim': 32, 'no_reward_norm': False, 'no_double_q': False, 'seed': 42, 'eval_interval': 1000, 'eval_episodes': 10, 'log_interval': 1000, 'tag': 'qmix_final'}
+[output ] results\qmix_final
+[env    ] {'n_agents': 3, 'n_actions': 5, 'obs_dim': 18, 'state_dim': 54, 'episode_limit': 25}
+[ep   1000] return   -27.20 | eps 0.810 | loss  0.3744 |    219 steps/s | eval   -34.10 ± 13.42
+[ep   2000] return   -27.73 | eps 0.620 | loss  0.6801 |    202 steps/s | eval   -18.01 ±  5.91
+[ep   3000] return   -22.84 | eps 0.430 | loss  1.5266 |    196 steps/s | eval   -19.83 ±  5.66
+[ep   4000] return   -20.90 | eps 0.240 | loss  3.1493 |    195 steps/s | eval   -22.79 ±  5.55
+[ep   5000] return    -8.83 | eps 0.050 | loss  6.7229 |    191 steps/s | eval   -20.17 ±  4.54
+[ep   6000] return   -53.34 | eps 0.050 | loss 13.2932 |    187 steps/s | eval   -23.30 ±  3.37
+[ep   7000] return   -32.96 | eps 0.050 | loss 22.6579 |    186 steps/s | eval   -28.26 ±  4.81
+[ep   8000] return   -19.12 | eps 0.050 | loss 33.1166 |    188 steps/s | eval   -27.19 ±  8.09

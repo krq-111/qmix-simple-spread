@@ -166,7 +166,6 @@ class QMIX:
                 delta = b_mean - self._r_mean
                 tot = self._r_count + b_cnt
                 self._r_mean += delta * b_cnt / tot
-                m_a = self._r_mean
                 self._r_var = (self._r_var * self._r_count
                                + b_var * b_cnt + delta ** 2 * self._r_count * b_cnt / tot) / tot
                 self._r_count = tot
@@ -194,6 +193,20 @@ class QMIX:
         """目标网络硬更新: target <- eval。"""
         self.rnn_target.load_state_dict(self.rnn_eval.state_dict())
         self.mixer_target.load_state_dict(self.mixer_eval.state_dict())
+
+    @torch.no_grad()
+    def soft_update_target(self, tau=0.005):
+        """目标网络软更新(Polyak 平均): target <- tau*eval + (1-tau)*target。
+
+        相比硬拷贝, 目标网络平滑跟随在线网络, 能显著抑制 TD 自举的正反馈
+        (off-policy 仓库在 MPE 上用的就是这种方式)。
+        """
+        for t_param, param in zip(self.rnn_target.parameters(),
+                                   self.rnn_eval.parameters()):
+            t_param.data.mul_(1.0 - tau).add_(param.data, alpha=tau)
+        for t_param, param in zip(self.mixer_target.parameters(),
+                                  self.mixer_eval.parameters()):
+            t_param.data.mul_(1.0 - tau).add_(param.data, alpha=tau)
 
     # ------------------------------------------------------------ 存取
     def save(self, path, extra=None):
