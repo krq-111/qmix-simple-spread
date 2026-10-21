@@ -65,8 +65,8 @@ def main():
     env.reset(seed=2024)
     mean_r, std_r, returns = evaluate(env, agent, args.episodes)
     env.close()
-    trained_for = hparams.get("episode", hparams.get("episodes", "?"))
-    print(f"[eval  ] checkpoint={args.checkpoint} (trained {trained_for} episodes)")
+    print(f"[eval  ] checkpoint={args.checkpoint}"
+          f" (saved at episode {ckpt.get('episode', '?')})")
     print(f"[eval  ] greedy return over {args.episodes} episodes: "
           f"{mean_r:.2f} ± {std_r:.2f}")
     print(f"[eval  ] per-episode: {[round(r, 1) for r in returns]}")

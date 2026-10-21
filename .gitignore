@@ -9,5 +9,11 @@ _reference/
 # 训练产物: 保留曲线/日志/GIF, 忽略模型权重(体积大, 按需从 release 下载)
 results/**/*.pth
 
-# 调试用的冒烟测试结果
+# 调试用的冒烟测试与消融实验结果(结论见 README 消融表)
 results/smoke*/
+results/qmix_attempt*/
+results/F*/
+results_exp*.log
+f*.log
+train_*.log
+results/exp*/

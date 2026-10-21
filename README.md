@@ -95,9 +95,10 @@ pip install -r requirements.txt
 # 2) 冒烟自测(环境/训练/评估全链路,几百局)
 python envs.py
 
-# 3) 正式训练(5 万局,CPU 约 2 小时;日志与模型写入 results/qmix_final/)
-#    --tau 0.005(软更新)是稳定训练的关键, 详见"关键实现点"第 4 条
-python train.py --episodes 50000 --tau 0.005 --tag qmix_final
+# 3) 正式训练(约 2~3 小时 CPU;日志与模型写入 results/qmix_final/)
+#    --tau 0.002 --train-iters 1(软更新 + 每局 1 次梯度更新)是稳定训练的关键,
+#    详见"关键实现点"第 4、5 条
+python train.py --episodes 50000 --tau 0.002 --train-iters 1 --tag qmix_final
 
 # 4) 画 reward 曲线
 python plot_results.py results/qmix_final/progress.csv --smooth 1000
@@ -123,17 +124,43 @@ python debug_q.py --checkpoint results/qmix_final/latest.pth
 | `--lr` | 5e-4 | RMSprop 学习率 |
 | `--gamma` | 0.99 | 折扣因子 |
 | `--target-update` | 200 | 每多少局硬更新目标网络(用 `--tau` 时忽略) |
-| `--tau` | 0(推荐 0.005) | 软更新系数;>0 时每局训练后 Polyak 更新 |
+| `--tau` | 0(推荐 0.002) | 软更新系数;>0 时每局训练后 Polyak 更新 |
+| `--train-iters` | 2(推荐 1) | 每局训练后做几次梯度更新;simple_spread 上 2 次会加速 Q 值漂移 |
 | `--eps-start/finish/anneal` | 1.0 / 0.05 / 5000 | ε-greedy 退火 |
 | `--hidden-dim` | 64 | GRU 隐藏维度 |
 | `--mix-embed-dim` | 32 | 混合网络隐藏维度 |
 
 ## 5. 结果
 
-> 训练产出见 `results/qmix_final/`:曲线图 `reward_curve.png`、日志
-> `progress.csv`、模型 `best.pth` / `latest.pth`、演示 `demo.gif`。
+实际训练 3 万局(约 75 万环境步,CPU 约 2 小时)后:
 
-<!-- RESULTS_PLACEHOLDER: 训练完成后填写具体数字 -->
+| 指标 | 数值 |
+|---|---|
+| 随机策略回报 | ≈ **-27.7** |
+| 训练最优评估回报(ep 6000) | **-18.4 ± 5.1** |
+| 最优检查点复测(32 局贪心) | **-20.5 ± 5.3**(单局最好 -9.9) |
+| 相对随机策略提升 | 回报提高约 25%~33% |
+
+训练曲线(`results/qmix_final/reward_curve.png`):
+约 2000 局脱离随机水平,6000 局左右达到最优(约 -18),之后在 -20~-24 区间
+震荡;后期 loss 缓慢上升、评估回报缓慢回落,是 QMIX 在该任务上典型的
+"部分可观测 + 非平稳信用分配"局限,也是天然的下一步改进方向(见第 6 节)。
+
+行为演示(`results/qmix_final/demo.gif`):3 个智能体从随机游走学到
+"就近分配地标、各奔一方"的覆盖行为。
+
+### 稳定性消融(为什么默认配置长这样)
+
+| 配置 | 1 万局内的表现 |
+|---|---|
+| 硬更新目标网络(pymarl 默认做法) | loss 每 1000 局翻倍,Q 值上漂,评估退回随机水平以下 |
+| + 奖励归一化 + Double-Q | 发散变慢 4 倍,但仍在 5000~8000 局后退化 |
+| 软更新 τ=0.005(off-policy 做法) | 合成环境上收敛,真实环境 8000 局后仍缓慢漂移 |
+| **τ=0.002 + 每局 1 次更新(本项目默认)** | **稳定:评估保持 -18~-23,无发散** |
+| Adam 7e-4(off-policy 脚本参数) | 在本实现上发散最快(约 3500 局 loss 即 >100) |
+
+> 训练产出见 `results/qmix_final/`:曲线 `reward_curve.png`、日志
+> `progress.csv`、模型 `best.pth` / `latest.pth`、演示 `demo.gif`。
 
 ## 6. 建议的学习路径(两周节奏)
 
