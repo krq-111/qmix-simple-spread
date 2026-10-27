@@ -18,6 +18,7 @@ from runner import evaluate
 
 
 def load_agent(ckpt_path, device="cpu"):
+    """加载检查点, 返回 (agent, env_info, 训练参数, 保存时的局数)。"""
     ckpt = torch.load(ckpt_path, map_location=device, weights_only=False)
     info, hparams = ckpt["info"], ckpt["args"]
     agent = QMIX(n_agents=info["n_agents"], n_actions=info["n_actions"],
@@ -26,7 +27,7 @@ def load_agent(ckpt_path, device="cpu"):
                  mix_embed_dim=hparams.get("mix_embed_dim", 32),
                  device=device)
     agent.load(ckpt_path)
-    return agent, info, hparams
+    return agent, info, hparams, ckpt.get("episode", "?")
 
 
 def record_gif(agent, info, out_path, n_episodes=3, fps=10):
@@ -59,14 +60,13 @@ def main():
     p.add_argument("--fps", type=int, default=10)
     args = p.parse_args()
 
-    agent, info, hparams = load_agent(args.checkpoint)
+    agent, info, hparams, saved_ep = load_agent(args.checkpoint)
     env = SimpleSpreadEnv(info["n_agents"], info["n_agents"],
                           info["episode_limit"], 0.5)
     env.reset(seed=2024)
     mean_r, std_r, returns = evaluate(env, agent, args.episodes)
     env.close()
-    print(f"[eval  ] checkpoint={args.checkpoint}"
-          f" (saved at episode {ckpt.get('episode', '?')})")
+    print(f"[eval  ] checkpoint={args.checkpoint} (saved at episode {saved_ep})")
     print(f"[eval  ] greedy return over {args.episodes} episodes: "
           f"{mean_r:.2f} ± {std_r:.2f}")
     print(f"[eval  ] per-episode: {[round(r, 1) for r in returns]}")
